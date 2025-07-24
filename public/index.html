@@ -1,1 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Team Ranking</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+  <style>
+    #list { list-style: none; padding: 0; width: 300px; }
+    #list li { padding: 10px; border: 1px solid #ccc; margin-bottom: 5px; background: #f9f9f9; cursor: grab; }
+  </style>
+</head>
+<body>
+  <h2>Team-Based Ranked List</h2>
+
+  <input type="text" id="teamInput" placeholder="Enter team name" />
+  <button onclick="joinTeam()">Join Team</button>
+
+  <div id="app" style="display:none;">
+    <h3 id="teamTitle"></h3>
+    <ul id="list"></ul>
+    <input type="text" id="itemInput" placeholder="New item" />
+    <button onclick="addItem()">Add</button>
+  </div>
+
+  <script>
+    const socket = io();
+    let currentTeam = null;
+    const list = document.getElementById("list");
+
+    const sortable = new Sortable(list, {
+      animation: 150,
+      onEnd: () => {
+        if (!currentTeam) return;
+        const items = Array.from(list.children).map(li => li.innerText);
+        socket.emit('updateList', { team: currentTeam, list: items });
+      }
+    });
+
+    function joinTeam() {
+      const team = document.getElementById("teamInput").value.trim();
+      if (!team) return alert("Please enter a team name.");
+
+      currentTeam = team;
+      socket.emit('joinTeam', team);
+      document.getElementById("app").style.display = "block";
+      document.getElementById("teamTitle").innerText = `Team: ${team}`;
+    }
+
+    socket.on('initList', items => {
+      list.innerHTML = '';
+      items.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+    });
+
+    socket.on('listUpdated', items => {
+      list.innerHTML = '';
+      items.forEach(item => {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      });
+    });
+
+    function addItem() {
+      const value = document.getElementById("itemInput").value;
+      if (value && currentTeam) {
+        socket.emit('addItem', { team: currentTeam, item: value });
+        document.getElementById("itemInput").value = '';
+      }
+    }
+  </script>
+</body>
+</html>
 
