@@ -9,7 +9,8 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Serve static frontend
-app.use(express.static(path.join(__dirname + 'public')));
+app.use(express.static(path.join(__dirname, 'public')));
+
 
 // Dictionary of teams to their lists
 const teamLists = {};
