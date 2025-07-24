@@ -1,6 +1,7 @@
 
 const express = require('express');
 const http = require('http');
+const path =require('path');
 const socketIo = require('socket.io');
 
 const app = express();
@@ -8,7 +9,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 // Serve static frontend
-app.use(express.static(__dirname + '/public'));
+app.use(express.static(path.join(__dirname + 'public')));
 
 // Dictionary of teams to their lists
 const teamLists = {};
@@ -44,6 +45,7 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(3000, () => {
-  console.log('Server listening on http://localhost:3000');
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => {
+  console.log('Server listening on port ${PORT}');
 });
