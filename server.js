@@ -18,10 +18,20 @@ const teamLists = {};
 io.on('connection', (socket) => {
   console.log('A user connected');
 
-  // Handle joining a team
-  socket.on('joinTeam', (team) => {
+ // Handle joining a team
+ socket.on('joinTeam', (team) => {
     socket.join(team);
-    if (!teamLists[team]) teamLists[team] = [];
+
+   if (!teamLists[team]) {
+      // If no lists exist yet, create empty
+      if (Object.keys(teamLists).length === 0) {
+        teamLists[team] = [];
+      } else {
+      // Clone the first existing team's list
+        const firstTeam = Object.keys(teamLists)[0];
+        teamLists[team] = [...teamLists[firstTeam]];
+      }
+    }
 
     // Send the current list to the user
     socket.emit('initList', teamLists[team]);
