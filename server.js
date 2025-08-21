@@ -45,11 +45,13 @@ io.on('connection', (socket) => {
   });
 
   // Handle new item
-  socket.on('addItem', ({ team, item }) => {
-    if (!teamLists[team]) return;
+socket.on('addItem', ({ item }) => {
+  // Add new item to all existing teams
+  for (const team of Object.keys(teamLists)) {
     teamLists[team].push(item);
-    io.to(team).emit('listUpdated', {team, list:teamLists[team]});
-  });
+    io.to(team).emit('listUpdated', { team, list: teamLists[team] });
+  }
+});
 
   socket.on('disconnect', () => {
     console.log('A user disconnected');

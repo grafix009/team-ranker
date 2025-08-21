@@ -56,10 +56,11 @@
       addBtn.onclick = () => {
         const val = input.value.trim();
         if (val) {
-          socket.emit('addItem', { team, item: val });
+          socket.emit('addItem', { item: val }); // 🔄 apply to all teams
           input.value = '';
         }
       };
+
 
       teamBox.appendChild(title);
       teamBox.appendChild(ul);
