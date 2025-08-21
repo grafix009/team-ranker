@@ -1,77 +1,136 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Team Ranking</title>
+  <title>Multi-Team Ranking</title>
   <script src="/socket.io/socket.io.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
   <style>
-    #list { list-style: none; padding: 0; width: 300px; }
-    #list li { padding: 10px; border: 1px solid #ccc; margin-bottom: 5px; background: #f9f9f9; cursor: grab; }
+    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
+    .team-container { display: flex; gap: 40px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
+    .team-box { border: 1px solid #ccc; padding: 15px; width: 280px; background: #f9f9f9; }
+    ul { list-style: none; padding: 0; }
+    li { padding: 8px; border: 1px solid #ccc; margin-bottom: 5px; background: white; cursor: grab; display: flex; justify-content: space-between; align-items: center; }
+    button { margin-left: 5px; }
   </style>
 </head>
 <body>
-  <h2>Team-Based Ranked List</h2>
+  <h2>Multi-Team Ranking</h2>
 
   <input type="text" id="teamInput" placeholder="Enter team name" />
   <button onclick="joinTeam()">Join Team</button>
 
-  <div id="app" style="display:none;">
-    <h3 id="teamTitle"></h3>
-    <ul id="list"></ul>
-    <input type="text" id="itemInput" placeholder="New item" />
-    <button onclick="addItem()">Add</button>
-  </div>
+  <div class="team-container" id="teamContainer"></div>
 
   <script>
     const socket = io();
-    let currentTeam = null;
-    const list = document.getElementById("list");
-
-    const sortable = new Sortable(list, {
-      animation: 150,
-      onEnd: () => {
-        if (!currentTeam) return;
-        const items = Array.from(list.children).map(li => li.innerText);
-        socket.emit('updateList', { team: currentTeam, list: items });
-      }
-    });
+    const teamContainer = document.getElementById("teamContainer");
+    const teams = {}; // key: team name, value: { ul, sortable }
 
     function joinTeam() {
-      const team = document.getElementById("teamInput").value.trim();
-      if (!team) return alert("Please enter a team name.");
-
-      currentTeam = team;
-      socket.emit('joinTeam', team);
-      document.getElementById("app").style.display = "block";
-      document.getElementById("teamTitle").innerText = `Team: ${team}`;
+      const teamName = document.getElementById("teamInput").value.trim();
+      if (!teamName || teams[teamName]) return;
+      socket.emit('joinTeam', teamName);
     }
 
-    socket.on('initList', items => {
-      list.innerHTML = '';
-      items.forEach(item => {
-        const li = document.createElement("li");
-        li.textContent = item;
-        list.appendChild(li);
+    socket.on('initList', ({ team, list }) => {
+      if (teams[team]) return;
+
+      const teamBox = document.createElement("div");
+      teamBox.className = "team-box";
+
+      const title = document.createElement("h3");
+      title.textContent = `Team: ${team}`;
+
+      const ul = document.createElement("ul");
+      list.forEach((item, index) => {
+        const li = createListItem(item, index, team);
+        ul.appendChild(li);
+      });
+
+      const input = document.createElement("input");
+      input.type = "text";
+      input.placeholder = "New item";
+
+      const addBtn = document.createElement("button");
+      addBtn.textContent = "Add";
+      addBtn.onclick = () => {
+        const val = input.value.trim();
+        if (val) {
+          socket.emit('addItem', { team, item: val });
+          input.value = '';
+        }
+      };
+
+      teamBox.appendChild(title);
+      teamBox.appendChild(ul);
+      teamBox.appendChild(input);
+      teamBox.appendChild(addBtn);
+      teamContainer.appendChild(teamBox);
+
+      const sortable = new Sortable(ul, {
+        animation: 150,
+        onEnd: () => {
+          const items = Array.from(ul.children).map(li => li.querySelector("span").innerText);
+          socket.emit('updateList', { team, list: items });
+        }
+      });
+
+      teams[team] = { ul, sortable };
+    });
+
+    socket.on('listUpdated', ({ team, list }) => {
+      if (!teams[team]) return;
+      const ul = teams[team].ul;
+      ul.innerHTML = '';
+      list.forEach((item, index) => {
+        const li = createListItem(item, index, team);
+        ul.appendChild(li);
       });
     });
 
-    socket.on('listUpdated', items => {
-      list.innerHTML = '';
-      items.forEach(item => {
-        const li = document.createElement("li");
-        li.textContent = item;
-        list.appendChild(li);
-      });
-    });
+    function createListItem(text, index, team) {
+      const li = document.createElement("li");
 
-    function addItem() {
-      const value = document.getElementById("itemInput").value;
-      if (value && currentTeam) {
-        socket.emit('addItem', { team: currentTeam, item: value });
-        document.getElementById("itemInput").value = '';
-      }
+      // Editable span
+      const span = document.createElement("span");
+      span.textContent = text;
+      span.contentEditable = false;
+      span.style.marginRight = "10px";
+
+      // Double-click to edit
+      span.addEventListener("dblclick", () => {
+        span.contentEditable = true;
+        span.focus();
+      });
+
+      // Save edit on Enter
+      span.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          span.contentEditable = false;
+
+          const items = Array.from(teams[team].ul.children).map(li =>
+            li.querySelector("span").innerText
+          );
+          socket.emit('updateList', { team, list: items });
+        }
+      });
+
+      // Delete button
+      const delBtn = document.createElement("button");
+      delBtn.textContent = "🗑️";
+      delBtn.onclick = () => {
+        const items = Array.from(teams[team].ul.children)
+          .filter((el, i) => i !== index)
+          .map(li => li.querySelector("span").innerText);
+
+        socket.emit('updateList', { team, list: items });
+      };
+
+      li.appendChild(span);
+      li.appendChild(delBtn);
+      return li;
     }
   </script>
 </body>
 </html>
-

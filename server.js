@@ -22,33 +22,33 @@ io.on('connection', (socket) => {
  socket.on('joinTeam', (team) => {
     socket.join(team);
 
-   if (!teamLists[team]) {
-      // If no lists exist yet, create empty
-      if (Object.keys(teamLists).length === 0) {
-        teamLists[team] = [];
-      } else {
-      // Clone the first existing team's list
-        const firstTeam = Object.keys(teamLists)[0];
+    // Initialize list by copying the first existing team's list
+    if (!teamLists[team]) {
+      const existingTeams = Object.keys(teamLists);
+      if (existingTeams.length > 0) {
+        const firstTeam = existingTeams[0];
         teamLists[team] = [...teamLists[firstTeam]];
+      } else {
+        teamLists[team] = [];
       }
     }
 
     // Send the current list to the user
-    socket.emit('initList', teamLists[team]);
+    socket.emit('initList', {team, list:teamLists[team]});
   });
 
   // Handle list reorder
   socket.on('updateList', ({ team, list }) => {
     if (!teamLists[team]) return;
     teamLists[team] = list;
-    io.to(team).emit('listUpdated', list);
+    io.to(team).emit('listUpdated', {team, list});
   });
 
   // Handle new item
   socket.on('addItem', ({ team, item }) => {
     if (!teamLists[team]) return;
     teamLists[team].push(item);
-    io.to(team).emit('listUpdated', teamLists[team]);
+    io.to(team).emit('listUpdated', {team, list:teamLists[team]});
   });
 
   socket.on('disconnect', () => {
