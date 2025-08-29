@@ -1,119 +1,128 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>Multi-Team Ranking</title>
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+  <meta charset="UTF-8" />
+  <title>Team Ranker</title>
   <style>
-    body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; }
-    .team-container { display: flex; gap: 40px; margin-top: 20px; flex-wrap: wrap; justify-content: center; }
-    .team-box { border: 1px solid #ccc; padding: 15px; width: 280px; background: #f9f9f9; }
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #teams { display: flex; gap: 20px; }
+    .team { border: 1px solid #ccc; padding: 10px; width: 250px; }
     ul { list-style: none; padding: 0; }
-    li { padding: 8px; border: 1px solid #ccc; margin-bottom: 5px; background: white; cursor: grab; display: flex; justify-content: space-between; align-items: center; }
-    button { margin-left: 5px; }
+    li { 
+      margin: 5px 0; 
+      padding: 5px; 
+      background: #f2f2f2; 
+      cursor: grab; 
+      display: flex; 
+      justify-content: space-between;
+      align-items: center;
+    }
+    button { margin-top: 5px; }
   </style>
 </head>
 <body>
-  <h2>Multi-Team Ranking</h2>
+  <h1>Team Ranker</h1>
 
-  <input type="text" id="teamInput" placeholder="Enter team name" />
-  <button onclick="joinTeam()">Join Team</button>
+  <div>
+    <input id="teamInput" placeholder="Enter team name" />
+    <button id="joinBtn">Join Team</button>
+  </div>
 
-  <div class="team-container" id="teamContainer"></div>
+  <div style="margin-top:10px;">
+    <input id="itemInput" placeholder="New item" />
+    <button id="addBtn">Add to All Teams</button>
+  </div>
 
+  <div id="teams"></div>
+
+  <div style="margin-top:20px;">
+    <button onclick="downloadExcel()">Download Excel</button>
+    <button onclick="downloadCSV()">Download CSV</button>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
   <script>
     const socket = io();
-    const teamContainer = document.getElementById("teamContainer");
-    const teams = {}; // key: team name, value: { ul, sortable }
+    const teams = {};
 
-    function joinTeam() {
-      const teamName = document.getElementById("teamInput").value.trim();
-      if (!teamName || teams[teamName]) return;
-      socket.emit('joinTeam', teamName);
-    }
+    const joinBtn = document.getElementById("joinBtn");
+    const teamInput = document.getElementById("teamInput");
+    const itemInput = document.getElementById("itemInput");
+    const addBtn = document.getElementById("addBtn");
+    const teamContainer = document.getElementById("teams");
 
-    socket.on('initList', ({ team, list }) => {
+    joinBtn.onclick = () => {
+      const team = teamInput.value.trim();
+      if (team && !teams[team]) {
+        socket.emit("joinTeam", team);
+      }
+    };
+
+    addBtn.onclick = () => {
+      const val = itemInput.value.trim();
+      if (val) {
+        socket.emit("addItem", { item: val });
+        itemInput.value = "";
+      }
+    };
+
+    socket.on("initList", ({ team, list }) => {
       if (teams[team]) return;
+      const div = document.createElement("div");
+      div.className = "team";
+      div.innerHTML = `<h3>${team}</h3><ul id="list-${team}"></ul>`;
+      teamContainer.appendChild(div);
 
-      const teamBox = document.createElement("div");
-      teamBox.className = "team-box";
+      const ul = div.querySelector("ul");
+      teams[team] = { ul };
 
-      const title = document.createElement("h3");
-      title.textContent = `Team: ${team}`;
-
-      const ul = document.createElement("ul");
       list.forEach((item, index) => {
-        const li = createListItem(item, index, team);
-        ul.appendChild(li);
+        ul.appendChild(createListItem(item, index, team));
       });
 
-      const input = document.createElement("input");
-      input.type = "text";
-      input.placeholder = "New item";
-
-      const addBtn = document.createElement("button");
-      addBtn.textContent = "Add";
-      addBtn.onclick = () => {
-        const val = input.value.trim();
-        if (val) {
-          socket.emit('addItem', { item: val }); // 🔄 apply to all teams
-          input.value = '';
-        }
-      };
-
-
-      teamBox.appendChild(title);
-      teamBox.appendChild(ul);
-      teamBox.appendChild(input);
-      teamBox.appendChild(addBtn);
-      teamContainer.appendChild(teamBox);
-
-      const sortable = new Sortable(ul, {
+      new Sortable(ul, {
         animation: 150,
         onEnd: () => {
           const items = Array.from(ul.children).map(li => li.querySelector("span").innerText);
-          socket.emit('updateList', { team, list: items });
+          socket.emit("updateList", { team, list: items });
         }
       });
-
-      teams[team] = { ul, sortable };
     });
 
-    socket.on('listUpdated', ({ team, list }) => {
-      if (!teams[team]) return;
-      const ul = teams[team].ul;
-      ul.innerHTML = '';
-      list.forEach((item, index) => {
-        const li = createListItem(item, index, team);
-        ul.appendChild(li);
-      });
+    socket.on("listUpdated", ({ team, list }) => {
+      const ul = teams[team]?.ul;
+      if (ul) {
+        ul.innerHTML = "";
+        list.forEach((item, index) => {
+          ul.appendChild(createListItem(item, index, team));
+        });
+      }
     });
 
     function createListItem(text, index, team) {
       const li = document.createElement("li");
 
-      // Editable span
       const span = document.createElement("span");
       span.textContent = text;
       span.contentEditable = false;
-      span.style.marginRight = "10px";
+      span.style.flex = "1";
 
-      // Double-click to edit
+      // Edit on double-click
       span.addEventListener("dblclick", () => {
         span.contentEditable = true;
         span.focus();
       });
 
-      // Save edit on Enter
       span.addEventListener("keydown", (e) => {
         if (e.key === "Enter") {
           e.preventDefault();
           span.contentEditable = false;
-
           const items = Array.from(teams[team].ul.children).map(li =>
             li.querySelector("span").innerText
           );
-          socket.emit('updateList', { team, list: items });
+          socket.emit("updateList", { team, list: items });
         }
       });
 
@@ -125,12 +134,50 @@
           .filter((el, i) => i !== index)
           .map(li => li.querySelector("span").innerText);
 
-        socket.emit('updateList', { team, list: items });
+        socket.emit("updateList", { team, list: items });
       };
 
       li.appendChild(span);
       li.appendChild(delBtn);
       return li;
+    }
+
+    // ---------- Export ----------
+    async function fetchData() {
+      const res = await fetch('/export');
+      return await res.json();
+    }
+
+    async function downloadExcel() {
+      const data = await fetchData();
+      const headers = Object.keys(data);
+      const maxLen = Math.max(...Object.values(data).map(list => list.length));
+      const rows = [headers];
+      for (let i = 0; i < maxLen; i++) {
+        rows.push(headers.map(team => data[team][i] || ""));
+      }
+      const ws = XLSX.utils.aoa_to_sheet(rows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Rankings");
+      XLSX.writeFile(wb, `team-rankings-${new Date().toISOString().split('T')[0]}.xlsx`);
+    }
+
+    async function downloadCSV() {
+      const data = await fetchData();
+      const headers = Object.keys(data);
+      const maxLen = Math.max(...Object.values(data).map(list => list.length));
+      let csv = headers.join(",") + "\n";
+      for (let i = 0; i < maxLen; i++) {
+        const row = headers.map(team => (data[team][i] !== undefined ? `"${data[team][i]}"` : ""));
+        csv += row.join(",") + "\n";
+      }
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `team-rankings-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
   </script>
 </body>

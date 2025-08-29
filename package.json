@@ -1,13 +1,16 @@
 {
   "name": "team-ranker",
   "version": "1.0.0",
-  "description": "Real-time team-based ranking list app",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
-    "express": "*",
-    "socket.io": "*"
+    "express": "^4.18.2",
+    "socket.io": "^4.7.5"
+  },
+  "engines": {
+    "node": ">=18.x"
   }
 }
