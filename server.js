@@ -1,64 +1,56 @@
+import express from "express";
+import http from "http";
+import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
 
-const express = require('express');
-const http = require('http');
-const path =require('path');
-const socketIo = require('socket.io');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new Server(server);
 
-// Serve static frontend
-app.use(express.static(path.join(__dirname, 'public')));
+let teamLists = {}; // { teamName: [items...] }
 
+app.use(express.static(path.join(__dirname, "public")));
 
-// Dictionary of teams to their lists
-const teamLists = {};
-
-io.on('connection', (socket) => {
-  console.log('A user connected');
-
- // Handle joining a team
- socket.on('joinTeam', (team) => {
-    socket.join(team);
-
-    // Initialize list by copying the first existing team's list
-    if (!teamLists[team]) {
-      const existingTeams = Object.keys(teamLists);
-      if (existingTeams.length > 0) {
-        const firstTeam = existingTeams[0];
-        teamLists[team] = [...teamLists[firstTeam]];
-      } else {
-        teamLists[team] = [];
-      }
-    }
-
-    // Send the current list to the user
-    socket.emit('initList', {team, list:teamLists[team]});
-  });
-
-  // Handle list reorder
-  socket.on('updateList', ({ team, list }) => {
-    if (!teamLists[team]) return;
-    teamLists[team] = list;
-    io.to(team).emit('listUpdated', {team, list});
-  });
-
-  // Handle new item
-socket.on('addItem', ({ item }) => {
-  // Add new item to all existing teams
-  for (const team of Object.keys(teamLists)) {
-    teamLists[team].push(item);
-    io.to(team).emit('listUpdated', { team, list: teamLists[team] });
-  }
+// Export all team lists as JSON
+app.get("/export", (req, res) => {
+  res.json(teamLists);
 });
 
-  socket.on('disconnect', () => {
-    console.log('A user disconnected');
+io.on("connection", (socket) => {
+  console.log("a user connected");
+
+  // Join a team
+  socket.on("joinTeam", (team) => {
+    socket.join(team);
+    if (!teamLists[team]) teamLists[team] = [];
+
+    socket.emit("initList", { team, list: teamLists[team] });
+  });
+
+  // Update a team’s list (reorder, edit, delete)
+  socket.on("updateList", ({ team, list }) => {
+    teamLists[team] = list;
+    io.to(team).emit("listUpdated", { team, list });
+  });
+
+  // Add item to ALL teams at once
+  socket.on("addItem", ({ item }) => {
+    for (const team of Object.keys(teamLists)) {
+      teamLists[team].push(item);
+      io.to(team).emit("listUpdated", { team, list: teamLists[team] });
+    }
+  });
+
+  socket.on("disconnect", () => {
+    console.log("user disconnected");
   });
 });
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log('Server listening on port ${PORT}');
+  console.log(`Server running on http://localhost:${PORT}`);
 });
